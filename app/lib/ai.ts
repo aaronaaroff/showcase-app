@@ -5,6 +5,8 @@ export interface GenerateOptions {
   temperature?: number;
   maxTokens?: number;
   model?: string;
+  topP?: number;
+  topK?: number;
 }
 
 export const aiService = {

@@ -26,7 +26,9 @@ export async function action({ request }: Route.ActionArgs) {
         stream: false,
         options: {
           temperature: options.temperature || 0.7,
-          max_tokens: options.maxTokens || 1000,
+          num_predict: options.maxTokens || 2048,
+          top_p: options.topP || 0.9,
+          top_k: options.topK || 40
         }
       }),
     });

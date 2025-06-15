@@ -52,8 +52,8 @@ const showcaseItems: ShowcaseItem[] = [
     href: "/chat/recipe-assistant",
     icon: ChefHat,
     category: "chat",
-    status: "coming-soon",
-    tags: ["AI", "Chat", "Cooking"]
+    status: "live",
+    tags: ["AI", "Chat", "Cooking", "Image Upload"]
   },
   {
     title: "Code Reviewer",
