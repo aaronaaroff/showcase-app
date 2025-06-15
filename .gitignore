@@ -4,3 +4,13 @@
 # React Router
 /.react-router/
 /build/
+
+# PocketBase
+/pocketbase-server/pb_data/
+/pocketbase-server/pb_migrations/
+/pocketbase-server/pocketbase
+/pocketbase-server/pocketbase.zip
+
+# Environment
+.env
+.env.local

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -10,8 +10,11 @@ import { Separator } from "~/components/ui/separator";
 import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
-import { Palette, Upload, Send, Sparkles, Brain, Zap, MessageSquare } from "lucide-react";
+import { Palette, Upload, Send, Sparkles, Brain, Zap, MessageSquare, History, Plus, Loader2 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import { chatService, pb, type ChatMessage, type ChatSession } from "~/lib/pocketbase";
+import { useToast } from "~/hooks/use-toast";
+import { Toaster } from "~/components/ui/toaster";
 
 type Personality = {
   id: string;
@@ -68,18 +71,92 @@ const personalities: Personality[] = [
 
 export default function ArtCriticChat() {
   const [selectedPersonality, setSelectedPersonality] = useState<Personality>(personalities[0]);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      content: "Welcome to the Art Critic Studio! Upload your artwork and I'll provide thoughtful critique from various perspectives.",
-      sender: "critic",
-      timestamp: new Date(),
-      personality: personalities[0]
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
+  const [currentSession, setCurrentSession] = useState<ChatSession | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  // Load sessions on mount
+  useEffect(() => {
+    loadSessions();
+  }, []);
+
+  // Create new session on first load if no current session
+  useEffect(() => {
+    if (!currentSession && sessions.length === 0 && !isLoading) {
+      createNewSession();
+    }
+  }, [sessions]);
+
+  const loadSessions = async () => {
+    setIsLoading(true);
+    try {
+      const loadedSessions = await chatService.getSessions();
+      setSessions(loadedSessions);
+      if (loadedSessions.length > 0 && !currentSession) {
+        // Load the most recent session
+        await loadSession(loadedSessions[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadSession = async (session: ChatSession) => {
+    setIsLoading(true);
+    try {
+      setCurrentSession(session);
+      const sessionMessages = await chatService.getMessages(session.id!);
+      const convertedMessages: Message[] = sessionMessages.map(msg => ({
+        id: msg.id!,
+        content: msg.content,
+        sender: msg.sender,
+        timestamp: new Date(msg.timestamp),
+        imageUrl: msg.image ? pb.files.getURL(msg, msg.image) : msg.imageUrl,
+        personality: msg.personalityId ? personalities.find(p => p.id === msg.personalityId) : undefined
+      }));
+      setMessages(convertedMessages);
+    } catch (error) {
+      console.error('Failed to load session messages:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chat history",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const createNewSession = async () => {
+    try {
+      const newSession = await chatService.createSession('Art Critique - ' + new Date().toLocaleDateString());
+      setCurrentSession(newSession);
+      setSessions([newSession, ...sessions]);
+      setMessages([
+        {
+          id: "welcome-" + newSession.id,
+          content: "Welcome to the Art Critic Studio! Upload your artwork and I'll provide thoughtful critique from various perspectives.",
+          sender: "critic",
+          timestamp: new Date(),
+          personality: personalities[0]
+        }
+      ]);
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create new session",
+      });
+    }
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,9 +169,14 @@ export default function ArtCriticChat() {
     }
   };
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!inputMessage.trim() && !uploadedImage) return;
+    if (!currentSession) {
+      await createNewSession();
+      return;
+    }
 
+    setIsSaving(true);
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputMessage || "Here's my artwork for critique",
@@ -111,9 +193,75 @@ export default function ArtCriticChat() {
       personality: selectedPersonality
     };
 
+    // Update UI immediately
     setMessages([...messages, userMessage, criticResponse]);
     setInputMessage("");
     setUploadedImage(null);
+    setUploadedImageFile(null);
+
+    // Save to PocketBase in the background
+    try {
+      // Save user message with image if present
+      const savedUserMessage = await chatService.saveMessage({
+        content: userMessage.content,
+        sender: userMessage.sender,
+        timestamp: userMessage.timestamp.toISOString(),
+        sessionId: currentSession.id!,
+      }, uploadedImageFile || undefined);
+
+      // If an image was uploaded, get its URL from the saved message
+      if (uploadedImageFile && savedUserMessage.image) {
+        userMessage.imageUrl = pb.files.getUrl(savedUserMessage, savedUserMessage.image);
+        // Update the message in the UI with the real URL
+        setMessages(msgs => msgs.map(msg => 
+          msg.id === userMessage.id ? { ...msg, imageUrl: userMessage.imageUrl } : msg
+        ));
+      }
+
+      // Save critic response
+      await chatService.saveMessage({
+        content: criticResponse.content,
+        sender: criticResponse.sender,
+        timestamp: criticResponse.timestamp.toISOString(),
+        sessionId: currentSession.id!,
+        personalityId: criticResponse.personality?.id,
+        personalityName: criticResponse.personality?.name,
+        personalityAvatar: criticResponse.personality?.avatar,
+        personalityColor: criticResponse.personality?.color
+      });
+
+      // Update session's last message
+      await chatService.updateSessionLastMessage(currentSession.id!, criticResponse.content);
+    } catch (error) {
+      console.error('Failed to save messages:', error);
+      toast({
+        title: "Warning",
+        description: "Messages sent but failed to save to history",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      // Store the file for upload
+      setUploadedImageFile(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setUploadedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else if (file) {
+      toast({
+        title: "Invalid file",
+        description: "Please upload an image file",
+        variant: "destructive"
+      });
+    }
   };
 
   const getCriticResponse = (personality: Personality) => {
@@ -127,7 +275,8 @@ export default function ArtCriticChat() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
         <Card className="border-none shadow-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur">
           <CardHeader className="space-y-4">
@@ -158,14 +307,50 @@ export default function ArtCriticChat() {
           <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-xl">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5" />
-                  Critique Session
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5" />
+                    Critique Session
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={createNewSession}
+                      className="gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      New Session
+                    </Button>
+                    <Select
+                      value={currentSession?.id || ""}
+                      onValueChange={(sessionId) => {
+                        const session = sessions.find(s => s.id === sessionId);
+                        if (session) loadSession(session);
+                      }}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select session" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sessions.map((session) => (
+                          <SelectItem key={session.id} value={session.id!}>
+                            {session.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <ScrollArea className="h-[500px] pr-4">
-                  <div className="space-y-4">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
                     {messages.map((message) => (
                       <div
                         key={message.id}
@@ -210,7 +395,8 @@ export default function ArtCriticChat() {
                         )}
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  )}
                 </ScrollArea>
 
                 <Separator className="my-4" />
@@ -263,10 +449,14 @@ export default function ArtCriticChat() {
                     />
                     <Button
                       onClick={sendMessage}
-                      disabled={!inputMessage.trim() && !uploadedImage}
+                      disabled={(!inputMessage.trim() && !uploadedImage) || isSaving}
                       className="gap-2"
                     >
-                      <Send className="h-4 w-4" />
+                      {isSaving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                       Send
                     </Button>
                   </div>
@@ -360,5 +550,14 @@ export default function ArtCriticChat() {
         </div>
       </div>
     </div>
+    <Toaster />
+    <input
+      ref={fileInputRef}
+      type="file"
+      accept="image/*"
+      onChange={handleFileChange}
+      className="hidden"
+    />
+    </>
   );
 }
