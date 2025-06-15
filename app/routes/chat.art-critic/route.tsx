@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import type { Route } from "./+types/route";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -15,9 +16,11 @@ import { cn } from "~/lib/utils";
 import { chatService, pb, type ChatMessage, type ChatSession } from "~/lib/pocketbase";
 import { useToast } from "~/hooks/use-toast";
 import { Toaster } from "~/components/ui/toaster";
+import { Header } from "~/components/layout/header";
+import { generateArtCritique, type PersonalityType } from "./ai-prompts";
 
 type Personality = {
-  id: string;
+  id: PersonalityType;
   name: string;
   description: string;
   avatar: string;
@@ -69,6 +72,13 @@ const personalities: Personality[] = [
   }
 ];
 
+export function meta({}: Route.MetaArgs) {
+  return [
+    { title: "Art Critic AI - Get Expert Feedback on Your Artwork" },
+    { name: "description", content: "Upload your artwork and receive constructive criticism from AI art critics with different personalities and perspectives." },
+  ];
+}
+
 export default function ArtCriticChat() {
   const [selectedPersonality, setSelectedPersonality] = useState<Personality>(personalities[0]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -79,6 +89,7 @@ export default function ArtCriticChat() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -177,6 +188,8 @@ export default function ArtCriticChat() {
     }
 
     setIsSaving(true);
+    setIsGenerating(true);
+    
     const userMessage: Message = {
       id: Date.now().toString(),
       content: inputMessage || "Here's my artwork for critique",
@@ -185,19 +198,31 @@ export default function ArtCriticChat() {
       imageUrl: uploadedImage || undefined
     };
 
-    const criticResponse: Message = {
-      id: (Date.now() + 1).toString(),
-      content: getCriticResponse(selectedPersonality),
-      sender: "critic",
-      timestamp: new Date(),
-      personality: selectedPersonality
-    };
-
-    // Update UI immediately
-    setMessages([...messages, userMessage, criticResponse]);
+    // Update UI with user message immediately
+    setMessages([...messages, userMessage]);
     setInputMessage("");
     setUploadedImage(null);
     setUploadedImageFile(null);
+
+    try {
+      // Generate AI response
+      const aiCritique = await generateArtCritique(
+        userMessage.content,
+        selectedPersonality.id,
+        !!uploadedImage
+      );
+
+      const criticResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        content: aiCritique,
+        sender: "critic",
+        timestamp: new Date(),
+        personality: selectedPersonality
+      };
+
+      // Update UI with critic response
+      setMessages([...messages, userMessage, criticResponse]);
+      setIsGenerating(false);
 
     // Save to PocketBase in the background
     try {
@@ -211,7 +236,7 @@ export default function ArtCriticChat() {
 
       // If an image was uploaded, get its URL from the saved message
       if (uploadedImageFile && savedUserMessage.image) {
-        userMessage.imageUrl = pb.files.getUrl(savedUserMessage, savedUserMessage.image);
+        userMessage.imageUrl = pb.files.getURL(savedUserMessage, savedUserMessage.image);
         // Update the message in the UI with the real URL
         setMessages(msgs => msgs.map(msg => 
           msg.id === userMessage.id ? { ...msg, imageUrl: userMessage.imageUrl } : msg
@@ -232,11 +257,21 @@ export default function ArtCriticChat() {
 
       // Update session's last message
       await chatService.updateSessionLastMessage(currentSession.id!, criticResponse.content);
-    } catch (error) {
-      console.error('Failed to save messages:', error);
+    } catch (saveError) {
+      console.error('Failed to save messages:', saveError);
       toast({
-        title: "Warning",
+        title: "Warning", 
         description: "Messages sent but failed to save to history",
+        variant: "destructive"
+      });
+    }
+    } catch (error) {
+      console.error('Failed to generate critique:', error);
+      setIsGenerating(false);
+      toast({
+        title: "Error",
+        description: "Failed to generate AI critique. Please try again.",
+        variant: "destructive"
       });
     } finally {
       setIsSaving(false);
@@ -264,20 +299,12 @@ export default function ArtCriticChat() {
     }
   };
 
-  const getCriticResponse = (personality: Personality) => {
-    const responses = {
-      modernist: "This piece challenges conventional boundaries with its bold approach. The composition speaks to contemporary anxieties while pushing the medium forward. Consider how the negative space might further amplify your conceptual framework.",
-      classicist: "The technical execution shows promise, though I notice some areas where traditional principles could strengthen the work. The color harmony references the masters, yet your unique voice emerges. Study the golden ratio to enhance compositional balance.",
-      expressionist: "Raw emotion pulses through every brushstroke! This work screams authenticity and vulnerability. The chaos speaks volumes, but don't lose sight of the viewer's emotional journey. Push harder into the darkness - that's where truth lives.",
-      minimalist: "Less truly becomes more here. The restraint is admirable, though one questions if further reduction might crystallize your intent. Each element must justify its existence. Consider: what remains when everything unnecessary falls away?"
-    };
-    return responses[personality.id as keyof typeof responses] || "Interesting work!";
-  };
 
   return (
     <>
+      <Header />
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-6xl mx-auto space-y-6 mt-6">
         <Card className="border-none shadow-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur">
           <CardHeader className="space-y-4">
             <div className="flex items-center justify-between">
@@ -395,6 +422,25 @@ export default function ArtCriticChat() {
                         )}
                       </div>
                     ))}
+                    
+                    {/* Typing indicator when AI is generating */}
+                    {isGenerating && (
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className={cn(selectedPersonality.color, "text-white text-lg")}>
+                            {selectedPersonality.avatar}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="bg-muted rounded-lg p-4 max-w-[80%]">
+                          <div className="flex gap-1">
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                          </div>
+                          <p className="text-xs opacity-70 mt-2">— {selectedPersonality.name} is thinking...</p>
+                        </div>
+                      </div>
+                    )}
                     </div>
                   )}
                 </ScrollArea>
@@ -449,15 +495,15 @@ export default function ArtCriticChat() {
                     />
                     <Button
                       onClick={sendMessage}
-                      disabled={(!inputMessage.trim() && !uploadedImage) || isSaving}
+                      disabled={(!inputMessage.trim() && !uploadedImage) || isSaving || isGenerating}
                       className="gap-2"
                     >
-                      {isSaving ? (
+                      {isSaving || isGenerating ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
                         <Send className="h-4 w-4" />
                       )}
-                      Send
+                      {isGenerating ? "Generating..." : "Send"}
                     </Button>
                   </div>
                 </div>
