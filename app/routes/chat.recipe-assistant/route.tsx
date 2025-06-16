@@ -23,7 +23,11 @@ import {
   Sparkles,
   Loader2,
   ShoppingCart,
-  CookingPot
+  CookingPot,
+  Plus,
+  X,
+  Check,
+  Tag
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { chatService, pb, type ChatMessage, type ChatSession } from "~/lib/pocketbase";
@@ -37,6 +41,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "~/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -64,6 +80,24 @@ type Recipe = {
   tips?: string;
 };
 
+const commonIngredients = [
+  // Pantry Staples
+  "Salt", "Black Pepper", "Olive Oil", "Vegetable Oil", "Flour", "Sugar", "Eggs", "Butter",
+  "Garlic", "Onions", "Rice", "Pasta", "Breadcrumbs", "Vanilla Extract", "Baking Powder",
+  
+  // Proteins
+  "Chicken Breast", "Ground Beef", "Salmon", "Tofu", "Beans", "Lentils", "Cheese", "Milk",
+  
+  // Vegetables
+  "Tomatoes", "Carrots", "Potatoes", "Bell Peppers", "Spinach", "Broccoli", "Mushrooms",
+  
+  // Herbs & Spices
+  "Basil", "Oregano", "Thyme", "Paprika", "Cumin", "Chili Powder", "Ginger", "Lemon",
+  
+  // Others
+  "Soy Sauce", "Honey", "Vinegar", "Coconut Milk", "Stock/Broth", "Canned Tomatoes"
+];
+
 export default function RecipeAssistantChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -74,6 +108,8 @@ export default function RecipeAssistantChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [stapleIngredients, setStapleIngredients] = useState<string[]>([]);
+  const [isAddingIngredient, setIsAddingIngredient] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -194,7 +230,8 @@ export default function RecipeAssistantChat() {
       // Generate AI response
       const aiResponse = await generateRecipeResponse(
         userMessage.content,
-        !!uploadedImage
+        !!uploadedImage,
+        stapleIngredients
       );
 
       // Parse recipe if the response contains JSON
@@ -294,6 +331,29 @@ export default function RecipeAssistantChat() {
         variant: "destructive"
       });
     }
+  };
+
+  const addStapleIngredient = (ingredient: string) => {
+    if (!stapleIngredients.includes(ingredient)) {
+      setStapleIngredients([...stapleIngredients, ingredient]);
+      toast({
+        title: "Ingredient added",
+        description: `${ingredient} added to your staples`,
+      });
+    }
+    setIsAddingIngredient(false);
+  };
+
+  const removeStapleIngredient = (ingredient: string) => {
+    setStapleIngredients(stapleIngredients.filter(item => item !== ingredient));
+  };
+
+  const clearAllStaples = () => {
+    setStapleIngredients([]);
+    toast({
+      title: "Cleared",
+      description: "All staple ingredients removed",
+    });
   };
 
   const shareRecipe = async (recipe: Recipe) => {
@@ -447,6 +507,97 @@ export default function RecipeAssistantChat() {
               </div>
             </div>
           </CardHeader>
+        </Card>
+
+        {/* Staple Ingredients Section */}
+        <Card className="shadow-xl bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 border-orange-200 dark:border-orange-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-orange-900 dark:text-orange-100">
+                <Tag className="h-5 w-5" />
+                Your Kitchen Staples
+              </CardTitle>
+              <div className="flex gap-2">
+                <Popover open={isAddingIngredient} onOpenChange={setIsAddingIngredient}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/30 dark:hover:bg-orange-900/50"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Staple
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="end">
+                    <Command>
+                      <CommandInput placeholder="Search ingredients..." />
+                      <CommandEmpty>No ingredients found.</CommandEmpty>
+                      <CommandGroup className="max-h-64 overflow-auto">
+                        {commonIngredients
+                          .filter(ingredient => !stapleIngredients.includes(ingredient))
+                          .map((ingredient) => (
+                            <CommandItem
+                              key={ingredient}
+                              onSelect={() => addStapleIngredient(ingredient)}
+                              className="cursor-pointer"
+                            >
+                              <Check className="mr-2 h-4 w-4 opacity-0" />
+                              {ingredient}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {stapleIngredients.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllStaples}
+                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                  >
+                    Clear All
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {stapleIngredients.length === 0 ? (
+              <div className="text-center py-8">
+                <ShoppingCart className="h-12 w-12 text-orange-300 dark:text-orange-700 mx-auto mb-3" />
+                <p className="text-orange-700 dark:text-orange-300 font-medium">No staple ingredients added yet</p>
+                <p className="text-sm text-orange-600 dark:text-orange-400 mt-1">
+                  Add ingredients you always have in your kitchen for better recipe suggestions
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {stapleIngredients.map((ingredient) => (
+                    <Badge
+                      key={ingredient}
+                      variant="secondary"
+                      className="gap-1 bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200 hover:bg-orange-300 dark:hover:bg-orange-700"
+                    >
+                      {ingredient}
+                      <button
+                        onClick={() => removeStapleIngredient(ingredient)}
+                        className="ml-1 hover:bg-orange-300 dark:hover:bg-orange-600 rounded-full p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-sm text-orange-600 dark:text-orange-400">
+                  <Sparkles className="inline h-3 w-3 mr-1" />
+                  These ingredients will be considered in all recipe suggestions
+                </p>
+              </>
+            )}
+          </CardContent>
         </Card>
 
         <Card className="shadow-xl bg-white/95 dark:bg-slate-900/95">

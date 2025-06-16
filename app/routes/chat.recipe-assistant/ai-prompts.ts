@@ -89,16 +89,22 @@ This versatile dish is perfect for using up leftover rice and any vegetables you
 
 export async function generateRecipeResponse(
   userMessage: string,
-  hasImage: boolean = false
+  hasImage: boolean = false,
+  stapleIngredients: string[] = []
 ): Promise<string> {
   try {
     const imageContext = hasImage 
       ? "The user has shared a photo of ingredients. Based on what you can see in the image and their message, suggest recipes that use those ingredients."
       : "The user is describing ingredients they have or asking for recipe suggestions. Provide helpful recipe recommendations based on their input.";
 
+    const stapleContext = stapleIngredients.length > 0
+      ? `\n\nIMPORTANT: The user has these staple ingredients always available in their kitchen: ${stapleIngredients.join(', ')}. 
+      Consider incorporating these ingredients into your recipe suggestions when appropriate. You don't need to use all of them, but feel free to include relevant staples that would enhance the dish.`
+      : "";
+
     const prompt = `You are a friendly, warm, and knowledgeable AI chef assistant. Your personality is encouraging, helpful, and passionate about cooking. You love sharing recipes and cooking tips in a conversational, approachable way.
 
-${imageContext}
+${imageContext}${stapleContext}
 
 User's message: "${userMessage}"
 

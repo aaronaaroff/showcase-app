@@ -1,4 +1,3 @@
-import type { Route } from "./+types/home";
 import { Link } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
@@ -19,7 +18,7 @@ import {
   FileText
 } from "lucide-react";
 
-export function meta({}: Route.MetaArgs) {
+export function meta() {
   return [
     { title: "Showcase App - Modern Web Development Examples" },
     { name: "description", content: "A collection of modern web applications built with React Router, shadcn/ui, and AI integration" },
@@ -79,8 +78,8 @@ const showcaseItems: ShowcaseItem[] = [
     href: "/generator/resume-builder",
     icon: FileText,
     category: "generator",
-    status: "coming-soon",
-    tags: ["AI", "PDF", "Templates"]
+    status: "live",
+    tags: ["AI", "Templates", "ATS-Optimized"]
   },
   {
     title: "JSON Formatter",
