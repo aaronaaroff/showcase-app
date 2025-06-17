@@ -15,7 +15,8 @@ import {
   Code,
   BarChart3,
   FileJson,
-  FileText
+  FileText,
+  Music
 } from "lucide-react";
 
 export function meta() {
@@ -80,6 +81,15 @@ const showcaseItems: ShowcaseItem[] = [
     category: "generator",
     status: "live",
     tags: ["AI", "Templates", "ATS-Optimized"]
+  },
+  {
+    title: "Song Masher",
+    description: "Blend audio tracks into groovy mashups or create seamless playlists with funky controls and visualizations.",
+    href: "/tool/song-masher",
+    icon: Music,
+    category: "tool",
+    status: "live",
+    tags: ["Audio", "Mixing", "Visualizer", "Music"]
   },
   {
     title: "JSON Formatter",
