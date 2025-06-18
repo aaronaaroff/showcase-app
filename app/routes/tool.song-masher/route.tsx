@@ -25,12 +25,80 @@ import {
   Activity,
   Disc,
   Radio,
-  Gauge
+  Gauge,
+  Power,
+  Volume2,
+  Settings
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { useToast } from "~/hooks/use-toast";
 import { Toaster } from "~/components/ui/toaster";
 import { Header } from "~/components/layout/header";
+
+// Shared audio context for sound effects
+let soundEffectContext: AudioContext | null = null;
+
+// Industrial sound effects
+const playIndustrialSound = (type: 'click' | 'switch' | 'knob' | 'heavy' | 'process') => {
+  try {
+    if (!soundEffectContext) {
+      soundEffectContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    
+    const audioContext = soundEffectContext;
+    
+    const createNoise = (duration: number, frequency: number, volume: number = 0.1) => {
+    const sampleRate = audioContext.sampleRate;
+    const length = sampleRate * duration;
+    const buffer = audioContext.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * volume;
+    }
+    
+    const source = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    const gain = audioContext.createGain();
+    
+    filter.type = 'lowpass';
+    filter.frequency.value = frequency;
+    
+    gain.gain.setValueAtTime(volume, audioContext.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+    
+    source.buffer = buffer;
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioContext.destination);
+    
+    source.start();
+    source.stop(audioContext.currentTime + duration);
+  };
+  
+  switch (type) {
+    case 'click':
+      createNoise(0.05, 8000, 0.08);
+      break;
+    case 'switch':
+      createNoise(0.1, 4000, 0.12);
+      setTimeout(() => createNoise(0.03, 6000, 0.06), 20);
+      break;
+    case 'knob':
+      createNoise(0.02, 12000, 0.05);
+      break;
+    case 'heavy':
+      createNoise(0.15, 2000, 0.15);
+      setTimeout(() => createNoise(0.1, 1500, 0.1), 50);
+      break;
+    case 'process':
+      createNoise(0.3, 3000, 0.1);
+      break;
+  }
+  } catch (error) {
+    console.warn('Audio playback failed:', error);
+  }
+};
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -59,8 +127,8 @@ type AudioSource = {
 
 type ModeType = 'mash' | 'playlist';
 
-// Liquid Toggle Component
-function LiquidToggle({ 
+// Industrial Toggle Switch Component
+function IndustrialToggle({ 
   value, 
   onChange,
   leftLabel,
@@ -75,62 +143,77 @@ function LiquidToggle({
   leftIcon?: React.ComponentType<{ className?: string }>;
   rightIcon?: React.ComponentType<{ className?: string }>;
 }) {
+  const handleToggle = (newValue: ModeType) => {
+    playIndustrialSound('switch');
+    onChange(newValue);
+  };
+
   return (
-    <div className="relative inline-flex items-center p-1 bg-gray-900 rounded-full shadow-inner">
-      {/* Background liquid blob */}
-      <div 
-        className={cn(
-          "absolute inset-y-1 w-[calc(50%-4px)] rounded-full transition-all duration-500 ease-out",
-          "bg-gradient-to-br shadow-lg",
-          value === 'mash' 
-            ? "left-1 from-orange-500 to-red-500 shadow-orange-500/50" 
-            : "left-[calc(50%+4px)] from-cyan-500 to-blue-500 shadow-cyan-500/50"
-        )}
-        style={{
-          filter: 'blur(0.5px)',
-        }}
-      >
-        {/* Liquid effect layers */}
-        <div className="absolute inset-0 rounded-full bg-white/20 blur-sm animate-pulse" />
-        <div className="absolute inset-0 rounded-full bg-gradient-to-t from-transparent to-white/10" />
+    <div className="relative">
+      {/* Metal housing with rivets */}
+      <div className="relative bg-gradient-to-b from-gray-600 via-gray-700 to-gray-800 p-1 rounded-lg shadow-xl border border-gray-500">
+        {/* Rivets */}
+        <div className="absolute -top-1 -left-1 w-2 h-2 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full shadow-inner"></div>
+        <div className="absolute -top-1 -right-1 w-2 h-2 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full shadow-inner"></div>
+        <div className="absolute -bottom-1 -left-1 w-2 h-2 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full shadow-inner"></div>
+        <div className="absolute -bottom-1 -right-1 w-2 h-2 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full shadow-inner"></div>
+        
+        {/* Inner housing */}
+        <div className="bg-gradient-to-b from-gray-800 via-gray-900 to-black p-2 rounded shadow-inner">
+          <div className="flex">
+            {/* Left switch */}
+            <button
+              onClick={() => handleToggle('mash')}
+              className={cn(
+                "relative flex items-center gap-2 px-4 py-3 transition-all duration-200 transform",
+                "bg-gradient-to-b border-2 font-bold text-xs tracking-wider uppercase",
+                "shadow-lg active:shadow-inner active:translate-y-0.5",
+                value === 'mash' 
+                  ? "from-orange-400 via-orange-500 to-orange-600 border-orange-300 text-black shadow-orange-500/50" 
+                  : "from-gray-500 via-gray-600 to-gray-700 border-gray-400 text-gray-200 hover:from-gray-400"
+              )}
+              style={{
+                borderRadius: '4px 0 0 4px',
+                textShadow: value === 'mash' ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(0,0,0,0.5)'
+              }}
+            >
+              {LeftIcon && <LeftIcon className="h-3 w-3" />}
+              {leftLabel}
+            </button>
+            
+            {/* Right switch */}
+            <button
+              onClick={() => handleToggle('playlist')}
+              className={cn(
+                "relative flex items-center gap-2 px-4 py-3 transition-all duration-200 transform",
+                "bg-gradient-to-b border-2 font-bold text-xs tracking-wider uppercase",
+                "shadow-lg active:shadow-inner active:translate-y-0.5",
+                value === 'playlist' 
+                  ? "from-cyan-400 via-cyan-500 to-cyan-600 border-cyan-300 text-black shadow-cyan-500/50" 
+                  : "from-gray-500 via-gray-600 to-gray-700 border-gray-400 text-gray-200 hover:from-gray-400"
+              )}
+              style={{
+                borderRadius: '0 4px 4px 0',
+                textShadow: value === 'playlist' ? '0 1px 2px rgba(0,0,0,0.8)' : '0 1px 2px rgba(0,0,0,0.5)'
+              }}
+            >
+              {RightIcon && <RightIcon className="h-3 w-3" />}
+              {rightLabel}
+            </button>
+          </div>
+        </div>
       </div>
-      
-      {/* Buttons */}
-      <button
-        onClick={() => onChange('mash')}
-        className={cn(
-          "relative z-10 flex items-center gap-2 px-6 py-3 rounded-full font-semibold transition-all duration-300",
-          value === 'mash' 
-            ? "text-white" 
-            : "text-gray-400 hover:text-gray-200"
-        )}
-      >
-        {LeftIcon && <LeftIcon className="h-4 w-4" />}
-        {leftLabel}
-      </button>
-      <button
-        onClick={() => onChange('playlist')}
-        className={cn(
-          "relative z-10 flex items-center gap-2 px-6 py-3 rounded-full font-semibold transition-all duration-300",
-          value === 'playlist' 
-            ? "text-white" 
-            : "text-gray-400 hover:text-gray-200"
-        )}
-      >
-        {RightIcon && <RightIcon className="h-4 w-4" />}
-        {rightLabel}
-      </button>
     </div>
   );
 }
 
-// Circular Slider Component with tactile design
-function CircularSlider({ 
+// Industrial Heavy-Duty Knob Component
+function IndustrialKnob({ 
   value, 
   onChange, 
   min = 0, 
   max = 100, 
-  size = 120, 
+  size = 140, 
   color = '#ff6b35',
   label,
   unit = '%'
@@ -145,126 +228,224 @@ function CircularSlider({
   unit?: string;
 }) {
   const center = size / 2;
-  const radius = size / 2 - 15;
-  const angle = ((value - min) / (max - min)) * 360 - 90;
+  const radius = size / 2 - 25;
+  const angle = ((value - min) / (max - min)) * 270 - 135; // 270 degree range
+  
+  const [isDragging, setIsDragging] = useState(false);
+  const [lastSoundTime, setLastSoundTime] = useState(0);
+  
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    playIndustrialSound('knob');
+  };
+  
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
   
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (e.buttons !== 1) return;
+    if (!isDragging) return;
+    
+    const now = Date.now();
+    if (now - lastSoundTime > 100) {
+      playIndustrialSound('knob');
+      setLastSoundTime(now);
+    }
     
     const rect = e.currentTarget.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
     const mouseAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
-    let degrees = (mouseAngle * 180) / Math.PI + 90;
+    let degrees = (mouseAngle * 180) / Math.PI + 135;
     if (degrees < 0) degrees += 360;
+    if (degrees > 270) degrees = degrees > 360 - 45 ? 0 : 270;
     
-    const newValue = min + (degrees / 360) * (max - min);
+    const newValue = min + (degrees / 270) * (max - min);
     onChange(Math.max(min, Math.min(max, newValue)));
   };
+  
+  useEffect(() => {
+    const handleGlobalMouseUp = () => setIsDragging(false);
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const syntheticEvent = e as unknown as React.MouseEvent;
+      handleMouseMove(syntheticEvent);
+    };
+    
+    if (isDragging) {
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+    }
+    
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [isDragging]);
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      {label && <Label className="text-sm font-bold uppercase tracking-wider text-gray-300">{label}</Label>}
-      <div 
-        className="relative cursor-pointer select-none"
-        style={{ width: size, height: size }}
-        onMouseMove={handleMouseMove}
-      >
-        <svg width={size} height={size} className="transform -rotate-90 drop-shadow-2xl">
-          {/* Outer ring with notches */}
-          <circle
-            cx={center}
-            cy={center}
-            r={radius + 10}
-            fill="none"
-            stroke="rgba(0, 0, 0, 0.3)"
-            strokeWidth="2"
-          />
-          {/* Notches */}
-          {Array.from({ length: 12 }).map((_, i) => {
-            const notchAngle = (i * 30 - 90) * Math.PI / 180;
-            const innerR = radius + 5;
-            const outerR = radius + 12;
+    <div className="flex flex-col items-center gap-4">
+      {/* Industrial label plate */}
+      {label && (
+        <div className="bg-gradient-to-b from-gray-700 via-gray-800 to-gray-900 px-4 py-2 border border-gray-600 shadow-lg">
+          <div className="bg-gradient-to-b from-yellow-400 to-yellow-600 text-black text-xs font-bold uppercase tracking-wider px-2 py-1 shadow-inner">
+            {label}
+          </div>
+        </div>
+      )}
+      
+      {/* Knob housing */}
+      <div className="relative">
+        {/* Outer metal housing */}
+        <div 
+          className="relative bg-gradient-to-br from-gray-500 via-gray-600 to-gray-800 rounded-full p-3 shadow-2xl border-2 border-gray-400"
+          style={{ width: size + 20, height: size + 20 }}
+        >
+          {/* Mounting screws */}
+          {[0, 90, 180, 270].map((screwAngle) => {
+            const screwRadius = (size + 20) / 2 - 8;
+            const screwX = (size + 20) / 2 + screwRadius * Math.cos((screwAngle - 90) * Math.PI / 180);
+            const screwY = (size + 20) / 2 + screwRadius * Math.sin((screwAngle - 90) * Math.PI / 180);
             return (
-              <line
-                key={i}
-                x1={center + innerR * Math.cos(notchAngle)}
-                y1={center + innerR * Math.sin(notchAngle)}
-                x2={center + outerR * Math.cos(notchAngle)}
-                y2={center + outerR * Math.sin(notchAngle)}
-                stroke="rgba(0, 0, 0, 0.5)"
-                strokeWidth="2"
-              />
+              <div
+                key={screwAngle}
+                className="absolute w-3 h-3 bg-gradient-to-br from-gray-300 to-gray-700 rounded-full shadow-inner border border-gray-500"
+                style={{
+                  left: screwX - 6,
+                  top: screwY - 6,
+                }}
+              >
+                <div className="absolute inset-1 bg-gradient-to-br from-gray-600 to-gray-800 rounded-full">
+                  <div className="absolute inset-0.5 border-t border-gray-500 rounded-full"></div>
+                  <div className="absolute inset-0.5 border-b border-gray-400 rounded-full"></div>
+                </div>
+              </div>
             );
           })}
-          {/* Background circle */}
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="rgba(0, 0, 0, 0.8)"
-            stroke="rgba(255, 255, 255, 0.1)"
-            strokeWidth="2"
-          />
-          {/* Progress circle */}
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={`${(value - min) / (max - min) * 2 * Math.PI * radius} ${2 * Math.PI * radius}`}
-            className="filter drop-shadow-lg"
-            style={{
-              filter: `drop-shadow(0 0 10px ${color})`
-            }}
-          />
-          {/* Center circle */}
-          <circle
-            cx={center}
-            cy={center}
-            r={radius - 20}
-            fill="rgba(20, 20, 20, 1)"
-            stroke="rgba(255, 255, 255, 0.2)"
-            strokeWidth="1"
-          />
-          {/* Knob with metallic finish */}
-          <g transform={`rotate(${angle + 90} ${center} ${center})`}>
-            <circle
-              cx={center + radius}
-              cy={center}
-              r="12"
-              fill="url(#metalGradient)"
-              stroke={color}
-              strokeWidth="2"
-              className="drop-shadow-xl"
-            />
-            <circle
-              cx={center + radius}
-              cy={center}
-              r="4"
-              fill={color}
-            />
-          </g>
-          {/* Gradient definitions */}
-          <defs>
-            <radialGradient id="metalGradient">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
-              <stop offset="50%" stopColor="#cccccc" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#666666" stopOpacity="0.8" />
-            </radialGradient>
-          </defs>
-        </svg>
-        {/* Value display */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-3xl font-bold font-mono" style={{ color }}>
-              {Math.round(value)}
-            </div>
-            <div className="text-xs uppercase tracking-wider text-gray-500 font-bold">
-              {unit}
+          
+          {/* Inner knob area */}
+          <div 
+            className="relative cursor-pointer select-none bg-gradient-to-br from-gray-800 via-gray-900 to-black rounded-full shadow-inner border border-gray-700"
+            style={{ width: size, height: size }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+          >
+            <svg width={size} height={size} className="absolute inset-0">
+              {/* Scale markings */}
+              {Array.from({ length: 28 }).map((_, i) => {
+                const markAngle = (i * 270 / 27 - 135) * Math.PI / 180;
+                const innerR = radius - 8;
+                const outerR = radius - 2;
+                const isMajor = i % 9 === 0;
+                return (
+                  <line
+                    key={i}
+                    x1={center + innerR * Math.cos(markAngle)}
+                    y1={center + innerR * Math.sin(markAngle)}
+                    x2={center + outerR * Math.cos(markAngle)}
+                    y2={center + outerR * Math.sin(markAngle)}
+                    stroke={isMajor ? "#ffffff" : "#888888"}
+                    strokeWidth={isMajor ? "2" : "1"}
+                  />
+                );
+              })}
+              
+              {/* Active arc */}
+              <path
+                d={`M ${center + radius * Math.cos(-135 * Math.PI / 180)} ${center + radius * Math.sin(-135 * Math.PI / 180)} A ${radius} ${radius} 0 ${angle > 0 ? 1 : 0} 1 ${center + radius * Math.cos(angle * Math.PI / 180)} ${center + radius * Math.sin(angle * Math.PI / 180)}`}
+                fill="none"
+                stroke={color}
+                strokeWidth="6"
+                strokeLinecap="round"
+                style={{
+                  filter: `drop-shadow(0 0 8px ${color})`,
+                }}
+              />
+              
+              {/* Knob body with worn metal texture */}
+              <circle
+                cx={center}
+                cy={center}
+                r={radius - 15}
+                fill="url(#wornMetal)"
+                stroke="url(#metalRim)"
+                strokeWidth="3"
+              />
+              
+              {/* Knob pointer */}
+              <g transform={`rotate(${angle} ${center} ${center})`}>
+                <rect
+                  x={center - 2}
+                  y={center - radius + 8}
+                  width="4"
+                  height={radius - 25}
+                  fill="url(#pointerGrad)"
+                  rx="2"
+                />
+                <circle
+                  cx={center}
+                  cy={center - radius + 15}
+                  r="3"
+                  fill={color}
+                  style={{
+                    filter: `drop-shadow(0 0 4px ${color})`,
+                  }}
+                />
+              </g>
+              
+              {/* Center cap */}
+              <circle
+                cx={center}
+                cy={center}
+                r="8"
+                fill="url(#centerCap)"
+                stroke="#444"
+                strokeWidth="1"
+              />
+              
+              {/* Gradient definitions */}
+              <defs>
+                <radialGradient id="wornMetal">
+                  <stop offset="0%" stopColor="#6b7280" />
+                  <stop offset="30%" stopColor="#4b5563" />
+                  <stop offset="60%" stopColor="#374151" />
+                  <stop offset="100%" stopColor="#1f2937" />
+                </radialGradient>
+                <linearGradient id="metalRim">
+                  <stop offset="0%" stopColor="#9ca3af" />
+                  <stop offset="50%" stopColor="#6b7280" />
+                  <stop offset="100%" stopColor="#374151" />
+                </linearGradient>
+                <linearGradient id="pointerGrad">
+                  <stop offset="0%" stopColor="#f3f4f6" />
+                  <stop offset="100%" stopColor="#9ca3af" />
+                </linearGradient>
+                <radialGradient id="centerCap">
+                  <stop offset="0%" stopColor="#6b7280" />
+                  <stop offset="100%" stopColor="#374151" />
+                </radialGradient>
+              </defs>
+            </svg>
+            
+            {/* Value display with LED-style */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center bg-black/80 px-2 py-1 rounded border border-gray-600">
+                <div 
+                  className="text-2xl font-bold font-mono leading-none"
+                  style={{ 
+                    color: color,
+                    textShadow: `0 0 8px ${color}`,
+                    fontFamily: 'monospace'
+                  }}
+                >
+                  {Math.round(value)}
+                </div>
+                <div className="text-xs uppercase tracking-wider text-gray-400 font-bold mt-1">
+                  {unit}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -281,10 +462,15 @@ class AudioAnalyzer {
   private source: AudioBufferSourceNode | null = null;
 
   constructor() {
-    this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 256;
-    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    try {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+    } catch (error) {
+      console.error('Failed to create AudioContext:', error);
+      throw error;
+    }
   }
 
   async loadAudioFile(file: File): Promise<AudioBuffer> {
@@ -356,6 +542,247 @@ class AudioAnalyzer {
   }
 }
 
+// 2D XY Pad Control for Bass/Treble styled like wave visualizer
+function EQXYPadControl({ 
+  bassValue, 
+  trebleValue,
+  onBassChange,
+  onTrebleChange,
+  width = 200,
+  height = 120
+}: {
+  bassValue: number;
+  trebleValue: number;
+  onBassChange: (value: number) => void;
+  onTrebleChange: (value: number) => void;
+  width?: number;
+  height?: number;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [animationOffset, setAnimationOffset] = useState(0);
+  const [containerSize, setContainerSize] = useState({ width: width || 200, height });
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setAnimationOffset(prev => prev + 0.08);
+    }, 50);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Update container size when width is 0 (auto-size)
+  useEffect(() => {
+    if (width === 0 && containerRef.current) {
+      const updateSize = () => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (rect) {
+          setContainerSize({ width: rect.width - 24, height: rect.height - 60 }); // Subtract padding and header
+        }
+      };
+      
+      // Initial size calculation
+      setTimeout(updateSize, 100); // Allow DOM to settle
+      
+      // Use ResizeObserver for better responsiveness
+      const resizeObserver = new ResizeObserver(updateSize);
+      resizeObserver.observe(containerRef.current);
+      
+      return () => {
+        resizeObserver.disconnect();
+      };
+    } else {
+      setContainerSize({ width: width || 200, height });
+    }
+  }, [width, height]);
+  
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    playIndustrialSound('click');
+    updateValues(e);
+  };
+  
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    updateValues(e);
+  };
+  
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+  
+  const updateValues = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Convert to -100 to +100 range using current container size
+    const bassVal = Math.round(((x / containerSize.width) * 200) - 100);
+    const trebleVal = Math.round((((containerSize.height - y) / containerSize.height) * 200) - 100);
+    
+    onBassChange(Math.max(-100, Math.min(100, bassVal)));
+    onTrebleChange(Math.max(-100, Math.min(100, trebleVal)));
+    
+    playIndustrialSound('knob');
+  };
+  
+  useEffect(() => {
+    const handleGlobalMouseUp = () => setIsDragging(false);
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDragging) return;
+      const syntheticEvent = e as unknown as React.MouseEvent;
+      handleMouseMove(syntheticEvent);
+    };
+    
+    if (isDragging) {
+      document.addEventListener('mouseup', handleGlobalMouseUp);
+      document.addEventListener('mousemove', handleGlobalMouseMove);
+    }
+    
+    return () => {
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [isDragging]);
+  
+  // Convert values to pixel positions using current container size
+  const posX = ((bassValue + 100) / 200) * containerSize.width;
+  const posY = containerSize.height - ((trebleValue + 100) / 200) * containerSize.height;
+  
+  // Generate animated wave patterns based on EQ settings
+  const generateEQWave = (amplitude: number, frequency: number, phase: number) => {
+    const points = [];
+    for (let x = 0; x <= containerSize.width; x += 4) {
+      const bassInfluence = (bassValue / 100) * amplitude;
+      const trebleInfluence = (trebleValue / 100) * amplitude * 0.7;
+      const totalAmplitude = amplitude + bassInfluence + trebleInfluence;
+      const y = (containerSize.height / 2) + totalAmplitude * Math.sin((x + animationOffset + phase) * frequency * 0.02);
+      points.push(`${x},${y}`);
+    }
+    return points.join(' ');
+  };
+  
+  return (
+    <div ref={containerRef} className="bg-black rounded-lg p-3 shadow-inner border-2 border-gray-700 w-full h-full flex flex-col">
+      <div className="text-center mb-2">
+        <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">EQ CONTROL</span>
+      </div>
+      
+      <div 
+        className="relative cursor-crosshair select-none bg-gradient-to-b from-gray-900 to-black rounded border border-gray-700 flex-1"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+      >
+        <svg width="100%" height="100%" className="absolute inset-0">
+          {/* Grid lines */}
+          {Array.from({ length: 11 }).map((_, i) => (
+            <line
+              key={`h-${i}`}
+              x1="0"
+              y1={`${(i * 100) / 10}%`}
+              x2="100%"
+              y2={`${(i * 100) / 10}%`}
+              stroke={i === 5 ? "rgba(0, 255, 0, 0.3)" : "rgba(0, 255, 0, 0.1)"}
+              strokeWidth={i === 5 ? "2" : "1"}
+            />
+          ))}
+          {Array.from({ length: 11 }).map((_, i) => (
+            <line
+              key={`v-${i}`}
+              x1={`${(i * 100) / 10}%`}
+              y1="0"
+              x2={`${(i * 100) / 10}%`}
+              y2="100%"
+              stroke={i === 5 ? "rgba(0, 255, 0, 0.3)" : "rgba(0, 255, 0, 0.1)"}
+              strokeWidth={i === 5 ? "2" : "1"}
+            />
+          ))}
+          
+          {/* Animated wave patterns representing EQ response */}
+          <polyline
+            points={generateEQWave(12, 1, 0)}
+            fill="none"
+            stroke="#ff6b35"
+            strokeWidth="2"
+            opacity="0.8"
+            style={{
+              filter: 'drop-shadow(0 0 6px #ff6b35)',
+            }}
+          />
+          <polyline
+            points={generateEQWave(8, 1.5, 100)}
+            fill="none"
+            stroke="#00d4ff"
+            strokeWidth="1.5"
+            opacity="0.6"
+            style={{
+              filter: 'drop-shadow(0 0 4px #00d4ff)',
+            }}
+          />
+          
+          {/* Control point */}
+          <circle
+            cx={`${(posX / containerSize.width) * 100}%`}
+            cy={`${(posY / containerSize.height) * 100}%`}
+            r="6"
+            fill="rgba(255, 255, 255, 0.9)"
+            stroke="#00ff00"
+            strokeWidth="2"
+            style={{
+              filter: 'drop-shadow(0 0 8px #00ff00)',
+            }}
+          />
+          
+          {/* Crosshairs */}
+          <line
+            x1={`${(posX / containerSize.width) * 100}%`}
+            y1="0"
+            x2={`${(posX / containerSize.width) * 100}%`}
+            y2="100%"
+            stroke="rgba(255, 255, 255, 0.3)"
+            strokeWidth="1"
+            strokeDasharray="2,2"
+          />
+          <line
+            x1="0"
+            y1={`${(posY / containerSize.height) * 100}%`}
+            x2="100%"
+            y2={`${(posY / containerSize.height) * 100}%`}
+            stroke="rgba(255, 255, 255, 0.3)"
+            strokeWidth="1"
+            strokeDasharray="2,2"
+          />
+        </svg>
+        
+        {/* Value displays */}
+        <div className="absolute top-1 left-1 text-xs font-mono text-orange-400 font-bold"
+          style={{ textShadow: '0 0 4px #ff6b35' }}
+        >
+          B: {bassValue > 0 ? '+' : ''}{bassValue}
+        </div>
+        <div className="absolute top-1 right-1 text-xs font-mono text-cyan-400 font-bold"
+          style={{ textShadow: '0 0 4px #00d4ff' }}
+        >
+          T: {trebleValue > 0 ? '+' : ''}{trebleValue}
+        </div>
+      </div>
+      
+      {/* Axis labels */}
+      <div className="flex justify-between text-xs text-gray-500 mt-1">
+        <span>BASS -100</span>
+        <span>+100</span>
+      </div>
+      <div className="flex justify-center mt-1">
+        <div className="text-xs text-gray-500 transform -rotate-90 origin-center w-0">
+          <span className="inline-block whitespace-nowrap">TREBLE +100/-100</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Sin Wave Visualizer Component with real audio analysis
 function WaveVisualizer({ 
   isPlaying, 
@@ -413,8 +840,8 @@ function WaveVisualizer({
   };
 
   return (
-    <div className="w-full h-full bg-black border-y border-gray-700 shadow-inner -mx-6">
-      <svg width="100%" height="100%" viewBox={`0 0 800 ${height}`} preserveAspectRatio="none" className="filter contrast-125">
+    <div className="w-full h-full relative">
+      <svg width="100%" height="100%" viewBox={`0 0 800 ${height}`} preserveAspectRatio="xMidYMid meet" className="absolute inset-0">
         {/* Grid lines for oscilloscope effect */}
         {Array.from({ length: Math.floor(height / 10) + 1 }).map((_, i) => (
           <line
@@ -498,12 +925,30 @@ export default function SongMasher() {
   const [transitionDuration, setTransitionDuration] = useState(2);
   const [gapTime, setGapTime] = useState(0);
   
+  // Audio controls
+  const [bassLevel, setBassLevel] = useState(50);
+  const [trebleLevel, setTrebleLevel] = useState(50);
+  const [volume, setVolume] = useState(75);
+  const [position, setPosition] = useState(0);
+  const [currentPlaybackPosition, setCurrentPlaybackPosition] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
+  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   // Initialize audio analyzer
   useEffect(() => {
-    setAudioAnalyzer(new AudioAnalyzer());
+    try {
+      setAudioAnalyzer(new AudioAnalyzer());
+    } catch (error) {
+      console.error('Failed to initialize audio analyzer:', error);
+      toast({
+        title: "Audio initialization failed",
+        description: "Unable to initialize audio system. Please check your browser settings.",
+        variant: "destructive"
+      });
+    }
     
     // Cleanup on unmount
     return () => {
@@ -513,12 +958,16 @@ export default function SongMasher() {
     };
   }, []);
 
-  // Clean up audio source when component unmounts
+  // Clean up audio source and intervals when component unmounts
   useEffect(() => {
     return () => {
       if (currentAudioSource) {
         currentAudioSource.stop();
         setCurrentAudioSource(null);
+      }
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = null;
       }
     };
   }, [currentAudioSource]);
@@ -829,6 +1278,10 @@ export default function SongMasher() {
         currentAudioSource.stop();
         setCurrentAudioSource(null);
       }
+      if (playbackIntervalRef.current) {
+        clearInterval(playbackIntervalRef.current);
+        playbackIntervalRef.current = null;
+      }
       setIsPlaying(false);
     } else {
       // Start playback
@@ -839,14 +1292,42 @@ export default function SongMasher() {
         }
         
         const source = audioAnalyzer.createSource(processedAudioBuffer);
+        const startTime = (position / 100) * processedAudioBuffer.duration;
+        
         source.onended = () => {
           setIsPlaying(false);
           setCurrentAudioSource(null);
+          setCurrentPlaybackPosition(0);
+          if (playbackIntervalRef.current) {
+            clearInterval(playbackIntervalRef.current);
+            playbackIntervalRef.current = null;
+          }
         };
         
-        source.start();
+        source.start(0, startTime);
         setCurrentAudioSource(source);
         setIsPlaying(true);
+        setTotalDuration(processedAudioBuffer.duration);
+        setCurrentPlaybackPosition(startTime);
+        
+        // Update position during playback with precise timing
+        const audioStartTime = audioAnalyzer.getAudioContext().currentTime;
+        playbackIntervalRef.current = setInterval(() => {
+          const elapsed = audioAnalyzer.getAudioContext().currentTime - audioStartTime;
+          const currentPos = startTime + elapsed;
+          if (currentPos >= processedAudioBuffer.duration) {
+            setCurrentPlaybackPosition(processedAudioBuffer.duration);
+            setIsPlaying(false);
+            setCurrentAudioSource(null);
+            if (playbackIntervalRef.current) {
+              clearInterval(playbackIntervalRef.current);
+              playbackIntervalRef.current = null;
+            }
+          } else {
+            setCurrentPlaybackPosition(currentPos);
+          }
+        }, 100); // Update every 100ms for smooth progress
+        
       } catch (error) {
         toast({
           title: "Playback error",
@@ -934,402 +1415,566 @@ export default function SongMasher() {
   return (
     <>
       <Header />
-      <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black p-4`}>
-        <div className="max-w-7xl mx-auto space-y-6 mt-6">
-          {/* Header with tactile design */}
-          <Card className="border-2 border-gray-700 shadow-2xl bg-gray-900/95 backdrop-blur">
-            <CardHeader className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-4xl font-black uppercase tracking-wider bg-gradient-to-r from-gray-100 to-gray-300 bg-clip-text text-transparent">
-                    Song Masher
-                  </CardTitle>
-                  <CardDescription className="text-lg text-gray-400">
-                    Industrial-grade audio mixing and blending
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-4">
-                  <LiquidToggle
-                    value={mode}
-                    onChange={setMode}
-                    leftLabel="Mash"
-                    rightLabel="Playlist"
-                    leftIcon={Blend}
-                    rightIcon={ListMusic}
-                  />
-                  <div className="flex gap-2">
-                    <Badge variant="outline" className="gap-1 bg-gray-800 border-gray-600 text-gray-300">
-                      <Gauge className="h-3 w-3" />
-                      Pro Audio
-                    </Badge>
-                    <Badge variant="outline" className="gap-1 bg-gray-800 border-gray-600 text-gray-300">
-                      <Activity className="h-3 w-3" />
-                      Visualizer
-                    </Badge>
+      {/* Studio Background */}
+      <div className="min-h-screen bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 relative overflow-hidden">
+        {/* Studio ambient lighting */}
+        <div 
+          className="absolute inset-0 opacity-20"
+          style={{
+            backgroundImage: `
+              radial-gradient(ellipse at top, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+              radial-gradient(ellipse at bottom left, rgba(239, 68, 68, 0.1) 0%, transparent 50%),
+              radial-gradient(ellipse at bottom right, rgba(34, 197, 94, 0.1) 0%, transparent 50%)
+            `,
+          }}
+        />
+        
+        <div className="relative w-full mx-auto p-2 sm:p-4 flex items-center justify-center min-h-screen">
+          {/* Full width responsive layout */}
+          <div className="w-full max-w-[1600px] grid grid-cols-1 lg:grid-cols-[280px_1fr] xl:grid-cols-[320px_1fr] gap-2 sm:gap-4 items-start">
+            {/* Left sidebar - Input/Output Section */}
+            <div className="space-y-2 sm:space-y-4 order-2 lg:order-1">
+              {/* Input Section */}
+              <div className="bg-gradient-to-b from-gray-800 via-gray-900 to-black rounded-lg shadow-xl border-4 border-gray-700 p-3 sm:p-4">
+                <div className="text-center mb-3">
+                  <div className="bg-gradient-to-b from-gray-900 to-black px-4 py-2 rounded border border-gray-700 shadow-inner">
+                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wider">INPUT DECK</span>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
-          </Card>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Audio Sources with industrial design */}
-            <Card className="lg:col-span-1 border-2 border-gray-700 shadow-xl bg-gray-900">
-              <CardHeader className="border-b border-gray-700">
-                <CardTitle className="flex items-center gap-2 text-gray-100 font-black uppercase tracking-wider">
-                  <FileAudio className="h-5 w-5" style={{ color: currentColors.primary }} />
-                  Input Tracks
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  Load audio files or stream from YouTube
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 p-4">
-                {/* Upload Controls */}
-                <div className="space-y-3">
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    variant="outline"
-                    className="w-full gap-2 border-2 border-gray-600 hover:border-gray-500 bg-gray-800 hover:bg-gray-700 font-bold uppercase tracking-wider"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Upload Files
-                  </Button>
-                  
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="YouTube URL..."
-                      className="flex-1 bg-gray-800 border-2 border-gray-600 focus:border-gray-500 placeholder:text-gray-500"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          addYouTubeUrl(e.currentTarget.value);
-                          e.currentTarget.value = '';
-                        }
-                      }}
-                    />
-                    <Button
-                      size="icon"
-                      className="border-2"
-                      style={{ 
-                        backgroundColor: currentColors.primary,
-                        borderColor: currentColors.primary 
-                      }}
-                      onClick={() => {
-                        const input = document.querySelector('input[placeholder="YouTube URL..."]') as HTMLInputElement;
-                        if (input?.value) {
-                          addYouTubeUrl(input.value);
-                          input.value = '';
-                        }
-                      }}
-                    >
-                      <Youtube className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <Separator className="bg-gray-700" />
-
-                {/* Audio Sources List */}
-                <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {audioSources.length === 0 ? (
-                    <div className="text-center py-12">
-                      <Disc className="h-12 w-12 mx-auto text-gray-600 mb-3" />
-                      <p className="text-gray-500 font-bold uppercase text-xs tracking-wider">No tracks loaded</p>
-                    </div>
-                  ) : (
-                    audioSources.map((source) => (
-                      <div
-                        key={source.id}
-                        className="flex items-center gap-3 p-3 rounded-sm border-2 border-gray-700 bg-gray-800"
-                      >
-                        <div className="flex-shrink-0">
-                          {source.type === 'youtube' ? (
-                            <Youtube className="h-5 w-5" style={{ color: currentColors.primary }} />
-                          ) : (
-                            <FileAudio className="h-5 w-5" style={{ color: currentColors.primary }} />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-gray-200 truncate">{source.name}</p>
-                          {source.isLoaded ? (
-                            <div className="space-y-1">
-                              <p className="text-xs text-gray-500 font-mono">
-                                {Math.floor(source.duration! / 60)}:{(source.duration! % 60).toFixed(0).padStart(2, '0')}
-                              </p>
-                              {source.bpm && (
-                                <div className="flex gap-2 text-xs">
-                                  <span className="text-orange-400 font-bold">{source.bpm} BPM</span>
-                                  {source.analysisData && (
-                                    <span className="text-cyan-400 font-bold">
-                                      E:{source.analysisData.energy}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-gray-500">LOADING...</p>
-                          )}
-                        </div>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => removeAudioSource(source.id)}
-                          className="flex-shrink-0 hover:bg-gray-700"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+                
+                {/* Audio sources display */}
+                <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded p-3 border border-gray-700 shadow-inner mb-3">
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {audioSources.length === 0 ? (
+                      <div className="text-center py-4">
+                        <Disc className="h-8 w-8 mx-auto text-gray-600 mb-2 animate-pulse" />
+                        <p className="text-sm font-bold text-gray-500 uppercase">INSERT MEDIA</p>
                       </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Controls with industrial knobs */}
-            <Card className="lg:col-span-2 border-2 border-gray-700 shadow-xl bg-gray-900">
-              <CardHeader className="border-b border-gray-700">
-                <CardTitle className="flex items-center gap-2 text-gray-100 font-black uppercase tracking-wider">
-                  <Sliders className="h-5 w-5" style={{ color: currentColors.primary }} />
-                  {mode === 'mash' ? 'Mash Controls' : 'Playlist Controls'}
-                </CardTitle>
-                <CardDescription className="text-gray-400">
-                  {mode === 'mash' 
-                    ? 'Fine-tune your mashup parameters'
-                    : 'Configure seamless transitions'
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8 bg-gray-800/50">
-                {mode === 'mash' ? (
-                  // Mash Mode Controls
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                      <CircularSlider
-                        value={mashRatio}
-                        onChange={setMashRatio}
-                        color={mashColors.primary}
-                        label="Blend"
-                        min={0}
-                        max={100}
-                      />
-                      <CircularSlider
-                        value={crossfadeTime}
-                        onChange={setCrossfadeTime}
-                        color={mashColors.secondary}
-                        label="X-Fade"
-                        min={0}
-                        max={10}
-                        unit="SEC"
-                      />
-                      <CircularSlider
-                        value={tempo}
-                        onChange={setTempo}
-                        color={mashColors.accent}
-                        label="Tempo"
-                        min={50}
-                        max={150}
-                        unit="BPM"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  // Playlist Mode Controls
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                      <CircularSlider
-                        value={transitionDuration}
-                        onChange={setTransitionDuration}
-                        color={playlistColors.primary}
-                        label="Trans"
-                        min={0}
-                        max={10}
-                        unit="SEC"
-                      />
-                      <CircularSlider
-                        value={gapTime}
-                        onChange={setGapTime}
-                        color={playlistColors.secondary}
-                        label="Gap"
-                        min={0}
-                        max={5}
-                        unit="SEC"
-                      />
-                      <div className="flex flex-col items-center gap-4">
-                        <Label className="text-sm font-bold uppercase tracking-wider text-gray-300">Type</Label>
-                        <div className="space-y-2 w-full max-w-[150px]">
-                          <Button
-                            variant={transitionType === 'crossfade' ? 'default' : 'outline'}
-                            onClick={() => setTransitionType('crossfade')}
-                            className={cn(
-                              "w-full font-bold uppercase tracking-wider border-2",
-                              transitionType === 'crossfade' 
-                                ? "border-cyan-500" 
-                                : "border-gray-600 hover:border-gray-500"
+                    ) : (
+                      audioSources.map((source) => (
+                        <div key={source.id} className="bg-gradient-to-r from-gray-700 to-gray-800 rounded px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="text-sm font-mono text-gray-300 truncate flex-1">{source.name}</span>
+                            {source.bpm && (
+                              <span className="text-sm font-bold text-orange-400">{source.bpm}</span>
                             )}
-                            style={transitionType === 'crossfade' ? { backgroundColor: playlistColors.primary } : {}}
-                          >
-                            X-FADE
-                          </Button>
-                          <Button
-                            variant={transitionType === 'cut' ? 'default' : 'outline'}
-                            onClick={() => setTransitionType('cut')}
-                            className={cn(
-                              "w-full font-bold uppercase tracking-wider border-2",
-                              transitionType === 'cut' 
-                                ? "border-cyan-500" 
-                                : "border-gray-600 hover:border-gray-500"
-                            )}
-                            style={transitionType === 'cut' ? { backgroundColor: playlistColors.primary } : {}}
-                          >
-                            HARD CUT
-                          </Button>
+                            <button
+                              onClick={() => {
+                                playIndustrialSound('click');
+                                removeAudioSource(source.id);
+                              }}
+                              className="text-red-400 hover:text-red-300"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                          {source.duration && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-500 uppercase tracking-wider">Duration:</span>
+                              <span className="text-cyan-400 font-mono">
+                                {Math.floor(source.duration / 60)}:{String(Math.floor(source.duration % 60)).padStart(2, '0')}
+                              </span>
+                            </div>
+                          )}
                         </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                
+                {/* Load button */}
+                <button
+                  onClick={() => {
+                    playIndustrialSound('heavy');
+                    fileInputRef.current?.click();
+                  }}
+                  className="w-full bg-gradient-to-b from-gray-600 to-gray-800 border-2 border-gray-700 rounded px-4 py-3 shadow-lg active:shadow-inner active:translate-y-0.5 transition-all"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Upload className="h-4 w-4 text-gray-300" />
+                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wider">LOAD AUDIO</span>
+                  </div>
+                </button>
+              </div>
+              
+              {/* Output Section */}
+              <div className="bg-gradient-to-b from-gray-800 via-gray-900 to-black rounded-lg shadow-xl border-4 border-gray-700 p-4">
+                <div className="text-center mb-3">
+                  <div className="bg-gradient-to-b from-gray-900 to-black px-4 py-2 rounded border border-gray-700 shadow-inner">
+                    <span className="text-sm font-bold text-gray-300 uppercase tracking-wider">OUTPUT CONTROL</span>
+                  </div>
+                </div>
+                
+                {/* Audio player controls */}
+                {currentTrack && (
+                  <div className="space-y-3 mb-4">
+                    {/* Volume slider */}
+                    <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded p-3 border border-gray-700">
+                      <div className="flex items-center gap-3">
+                        <Volume2 className="h-4 w-4 text-gray-400" />
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={volume}
+                          onChange={(e) => {
+                            playIndustrialSound('knob');
+                            setVolume(Number(e.target.value));
+                          }}
+                          className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, #22c55e 0%, #22c55e ${volume}%, #374151 ${volume}%, #374151 100%)`
+                          }}
+                        />
+                        <span className="text-sm font-mono text-green-400 w-10 text-center">{volume}</span>
+                      </div>
+                      <div className="text-center mt-1">
+                        <span className="text-xs font-bold text-gray-600 uppercase">VOLUME</span>
+                      </div>
+                    </div>
+                    
+                    {/* Audio player-style position control */}
+                    <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded p-3 border border-gray-700">
+                      {/* Time display and controls */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-mono text-blue-400">
+                          {totalDuration > 0 
+                            ? `${Math.floor(currentPlaybackPosition / 60)}:${String(Math.floor(currentPlaybackPosition % 60)).padStart(2, '0')}` 
+                            : '0:00'
+                          }
+                        </span>
+                        <span className="text-sm font-mono text-gray-500">
+                          -{totalDuration > 0 
+                            ? `${Math.floor((totalDuration - currentPlaybackPosition) / 60)}:${String(Math.floor((totalDuration - currentPlaybackPosition) % 60)).padStart(2, '0')}` 
+                            : '0:00'
+                          }
+                        </span>
+                      </div>
+                      
+                      {/* Playback progress bar */}
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={totalDuration > 0 ? (currentPlaybackPosition / totalDuration) * 100 : position}
+                          onChange={(e) => {
+                            playIndustrialSound('knob');
+                            const newPosition = Number(e.target.value);
+                            setPosition(newPosition);
+                            
+                            // If playing, seek to new position
+                            if (isPlaying && currentAudioSource && processedAudioBuffer) {
+                              currentAudioSource.stop();
+                              const newStartTime = (newPosition / 100) * processedAudioBuffer.duration;
+                              setCurrentPlaybackPosition(newStartTime);
+                              
+                              // Start new source at new position
+                              const newSource = audioAnalyzer.createSource(processedAudioBuffer);
+                              newSource.onended = () => {
+                                setIsPlaying(false);
+                                setCurrentAudioSource(null);
+                                setCurrentPlaybackPosition(0);
+                              };
+                              newSource.start(0, newStartTime);
+                              setCurrentAudioSource(newSource);
+                            }
+                          }}
+                          className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                          style={{
+                            background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${totalDuration > 0 ? (currentPlaybackPosition / totalDuration) * 100 : position}%, #374151 ${totalDuration > 0 ? (currentPlaybackPosition / totalDuration) * 100 : position}%, #374151 100%)`
+                          }}
+                        />
+                        {/* Progress indicator dot */}
+                        <div 
+                          className="absolute top-0 w-4 h-2 bg-blue-500 rounded-full shadow-lg transform -translate-x-1/2 pointer-events-none"
+                          style={{
+                            left: `${totalDuration > 0 ? (currentPlaybackPosition / totalDuration) * 100 : position}%`,
+                            filter: 'drop-shadow(0 0 4px #3b82f6)'
+                          }}
+                        />
                       </div>
                     </div>
                   </div>
                 )}
-
-                <Separator className="my-8 bg-gray-700" />
-
-                {/* Process Button */}
-                <div className="text-center space-y-4">
-                  <Button
-                    onClick={processAudio}
-                    disabled={isProcessing || audioSources.length < 2}
-                    className="px-12 py-6 text-lg font-black uppercase tracking-wider border-2"
-                    style={{ 
-                      backgroundColor: currentColors.primary,
-                      borderColor: currentColors.primary 
-                    }}
-                  >
+                
+                {/* Process button */}
+                <button
+                  onClick={() => {
+                    playIndustrialSound('process');
+                    processAudio();
+                  }}
+                  disabled={isProcessing || audioSources.length < 2}
+                  className={cn(
+                    "w-full bg-gradient-to-b border-2 rounded shadow-lg transition-all p-3 mb-3",
+                    "active:shadow-inner active:translate-y-0.5",
+                    !isProcessing && audioSources.length >= 2 
+                      ? "from-red-600 to-red-800 border-red-700" 
+                      : "from-gray-600 to-gray-800 border-gray-700"
+                  )}
+                >
+                  <div className="flex items-center justify-center gap-2">
                     {isProcessing ? (
                       <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Processing...
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-300" />
+                        <span className="text-sm font-black text-gray-300 uppercase tracking-wider">PROCESSING</span>
                       </>
                     ) : (
                       <>
-                        <Zap className="mr-2 h-5 w-5" />
-                        {mode === 'mash' ? 'Create Mash' : 'Build Mix'}
+                        <Power className="h-4 w-4 text-gray-300" />
+                        <span className="text-sm font-black text-gray-300 uppercase tracking-wider">
+                          {mode === 'mash' ? 'MASH TRACKS' : 'BUILD LIST'}
+                        </span>
                       </>
                     )}
-                  </Button>
-                  
-                  {isProcessing && (
-                    <div className="space-y-2">
-                      <Progress 
-                        value={processingProgress} 
-                        className="w-full max-w-md mx-auto h-3 bg-gray-700" 
-                      />
-                      <p className="text-sm text-gray-400 font-mono">
-                        PROCESSING: {Math.round(processingProgress)}%
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Output Monitor with embedded visualizer */}
-          {currentTrack && (
-            <Card className="border-2 border-gray-700 shadow-xl bg-gray-900">
-              <CardHeader className="border-b border-gray-700">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2 text-gray-100 font-black uppercase tracking-wider">
-                    <Radio className="h-5 w-5" style={{ color: currentColors.primary }} />
-                    Output Monitor
-                  </CardTitle>
-                  <p className="text-sm text-gray-500 font-mono uppercase">
-                    {mode === 'mash' ? 'Mashup' : 'Playlist'} ready for export
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-6 p-0 bg-gray-800/50">
-                {/* Visualizer - Extended to container edges */}
-                <div className="px-6 pt-6">
-                  <WaveVisualizer 
-                    isPlaying={isPlaying} 
-                    color={currentColors.primary}
-                    height={80}
-                    audioAnalyzer={audioAnalyzer}
-                    audioBuffer={processedAudioBuffer}
-                  />
-                </div>
+                  </div>
+                </button>
                 
-                {/* Playback Controls */}
-                <div className="px-6 pb-6">
-                <div className="flex items-center justify-center gap-6">
-                  <Button
-                    size="icon"
-                    onClick={togglePlayback}
-                    className="h-24 w-24 rounded-full border-4 transition-all hover:scale-105"
-                    style={{ 
-                      backgroundColor: isPlaying ? '#000' : currentColors.primary,
-                      borderColor: currentColors.primary
+                {/* Audio player-style controls */}
+                {currentTrack && (
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    {/* Main play/pause button */}
+                    <button
+                      onClick={() => {
+                        playIndustrialSound('heavy');
+                        togglePlayback();
+                      }}
+                      className={cn(
+                        "w-12 h-12 rounded-full border-2 shadow-lg active:shadow-inner active:translate-y-0.5 transition-all flex items-center justify-center",
+                        isPlaying 
+                          ? "bg-gradient-to-b from-red-500 to-red-700 border-red-400" 
+                          : "bg-gradient-to-b from-green-500 to-green-700 border-green-400"
+                      )}
+                    >
+                      {isPlaying ? (
+                        <Pause className="h-6 w-6 text-white" />
+                      ) : (
+                        <Play className="h-6 w-6 text-white ml-0.5" />
+                      )}
+                    </button>
+                    
+                    {/* Download button */}
+                    <button
+                      onClick={() => {
+                        playIndustrialSound('click');
+                        downloadResult();
+                      }}
+                      className="bg-gradient-to-b from-gray-600 to-gray-800 border-2 border-gray-700 rounded px-4 py-2 shadow-lg active:shadow-inner active:translate-y-0.5 transition-all"
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                        <Download className="h-4 w-4 text-blue-400" />
+                        <span className="text-xs font-bold text-blue-400 uppercase">DOWNLOAD</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
+                
+                {/* Progress indicator */}
+                {isProcessing && (
+                  <div className="bg-gradient-to-b from-gray-800 to-gray-900 rounded p-2 border border-gray-700 mt-3">
+                    <Progress 
+                      value={processingProgress} 
+                      className="h-2 bg-gray-700" 
+                    />
+                    <p className="text-xs font-mono text-center mt-2 text-gray-400">
+                      {Math.round(processingProgress)}%
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Main Boombox Unit */}
+            <div className="relative order-1 lg:order-2">
+              {/* Outer casing with realistic depth */}
+              <div className="relative bg-gradient-to-b from-gray-800 via-gray-900 to-black rounded-lg shadow-2xl"
+                style={{
+                  boxShadow: `
+                    0 50px 100px -20px rgba(0, 0, 0, 0.8),
+                    0 30px 60px -30px rgba(0, 0, 0, 0.9),
+                    inset 0 2px 4px rgba(255, 255, 255, 0.1),
+                    inset 0 -2px 4px rgba(0, 0, 0, 0.8)
+                  `
+                }}
+              >
+                {/* Top handle */}
+                <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 w-40 h-6">
+                  <div className="bg-gradient-to-b from-gray-700 to-gray-800 rounded-full h-full shadow-lg border-2 border-gray-600"
+                    style={{
+                      boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3)'
                     }}
                   >
-                    {isPlaying ? (
-                      <Pause className="h-12 w-12" />
-                    ) : (
-                      <Play className="h-12 w-12" />
-                    )}
-                  </Button>
-                  
-                  <div className="h-16 w-px bg-gray-700" />
-                  
-                  <Button
-                    onClick={downloadResult}
-                    variant="outline"
-                    className="gap-2 px-8 py-4 font-bold uppercase tracking-wider border-2 border-gray-600 hover:border-gray-500"
-                  >
-                    <Download className="h-5 w-5" />
-                    Export File
-                  </Button>
+                    <div className="h-full rounded-full bg-gradient-to-b from-transparent via-gray-700 to-transparent opacity-50"></div>
+                  </div>
                 </div>
+                
+                {/* Main body */}
+                <div className="relative p-2 sm:p-4 rounded-lg bg-gradient-to-b from-gray-800 via-gray-850 to-gray-900 border-4 border-gray-700">
+                  {/* Textured surface */}
+                  <div className="absolute inset-0 rounded-lg opacity-30"
+                    style={{
+                      backgroundImage: `
+                        repeating-linear-gradient(
+                          45deg,
+                          transparent,
+                          transparent 2px,
+                          rgba(0, 0, 0, 0.1) 2px,
+                          rgba(0, 0, 0, 0.1) 4px
+                        ),
+                        repeating-linear-gradient(
+                          -45deg,
+                          transparent,
+                          transparent 2px,
+                          rgba(0, 0, 0, 0.1) 2px,
+                          rgba(0, 0, 0, 0.1) 4px
+                        )
+                      `
+                    }}
+                  />
+                  
+                  {/* Top section with brand and controls */}
+                  <div className="relative z-10 space-y-2 sm:space-y-4">
+                    {/* Brand plate */}
+                    <div className="text-center">
+                      <div className="inline-block bg-gradient-to-b from-gray-900 to-black px-6 py-2 rounded-sm shadow-inner border border-gray-700">
+                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-wider bg-gradient-to-b from-gray-300 to-gray-500 bg-clip-text text-transparent"
+                          style={{
+                            fontFamily: 'Impact, sans-serif',
+                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)',
+                            letterSpacing: '0.15em'
+                          }}
+                        >
+                          MASHER
+                        </h1>
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">
+                          PRO AUDIO SYSTEM
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Main control section with new layout */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4 items-start">
+                      {/* Left side - Vertical mode controls and settings */}
+                      <div className="space-y-4 h-full flex flex-col">
+                        {/* Mode selector */}
+                        <div className="bg-black rounded-lg p-2 shadow-inner border-2 border-gray-700 flex-shrink-0">
+                          <IndustrialToggle
+                            value={mode}
+                            onChange={setMode}
+                            leftLabel="MASH"
+                            rightLabel="LIST"
+                            leftIcon={Blend}
+                            rightIcon={ListMusic}
+                          />
+                        </div>
+                        
+                        {/* Vertical control knobs section - Full Height */}
+                        <div className="bg-black rounded-lg p-3 shadow-inner border-2 border-gray-700 flex-1">
+                          <div className="space-y-3 h-full flex flex-col justify-evenly">
+                            {/* Main blend controls - vertical layout */}
+                            {mode === 'mash' ? (
+                              <>
+                                <div className="flex items-center gap-3">
+                                  <div className="transform scale-75 origin-center">
+                                    <IndustrialKnob
+                                      value={mashRatio}
+                                      onChange={setMashRatio}
+                                      color="#ff6b35"
+                                      label="BLEND"
+                                      min={0}
+                                      max={100}
+                                      unit="%"
+                                      size={60}
+                                    />
+                                  </div>
+                                  <div className="bg-black/80 px-3 py-2 rounded border border-gray-600">
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold font-mono text-orange-400" style={{ textShadow: '0 0 6px #ff6b35' }}>
+                                        {Math.round(mashRatio)}%
+                                      </div>
+                                      <div className="text-xs text-gray-500 uppercase">BLEND</div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="transform scale-75 origin-center">
+                                    <IndustrialKnob
+                                      value={crossfadeTime}
+                                      onChange={setCrossfadeTime}
+                                      color="#ffb627"
+                                      label="FADE"
+                                      min={0}
+                                      max={10}
+                                      unit="SEC"
+                                      size={60}
+                                    />
+                                  </div>
+                                  <div className="bg-black/80 px-3 py-2 rounded border border-gray-600">
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold font-mono text-yellow-400" style={{ textShadow: '0 0 6px #ffb627' }}>
+                                        {crossfadeTime.toFixed(1)}s
+                                      </div>
+                                      <div className="text-xs text-gray-500 uppercase">FADE</div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="transform scale-75 origin-center">
+                                    <IndustrialKnob
+                                      value={tempo}
+                                      onChange={setTempo}
+                                      color="#f7931e"
+                                      label="TEMPO"
+                                      min={50}
+                                      max={150}
+                                      unit="BPM"
+                                      size={60}
+                                    />
+                                  </div>
+                                  <div className="bg-black/80 px-3 py-2 rounded border border-gray-600">
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold font-mono text-orange-300" style={{ textShadow: '0 0 6px #f7931e' }}>
+                                        {Math.round(tempo)}
+                                      </div>
+                                      <div className="text-xs text-gray-500 uppercase">BPM</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-3">
+                                  <div className="transform scale-75 origin-center">
+                                    <IndustrialKnob
+                                      value={transitionDuration}
+                                      onChange={setTransitionDuration}
+                                      color="#00d4ff"
+                                      label="TRANS"
+                                      min={0}
+                                      max={10}
+                                      unit="SEC"
+                                      size={60}
+                                    />
+                                  </div>
+                                  <div className="bg-black/80 px-3 py-2 rounded border border-gray-600">
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold font-mono text-cyan-400" style={{ textShadow: '0 0 6px #00d4ff' }}>
+                                        {transitionDuration.toFixed(1)}s
+                                      </div>
+                                      <div className="text-xs text-gray-500 uppercase">TRANS</div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="transform scale-75 origin-center">
+                                    <IndustrialKnob
+                                      value={gapTime}
+                                      onChange={setGapTime}
+                                      color="#0099cc"
+                                      label="GAP"
+                                      min={0}
+                                      max={5}
+                                      unit="SEC"
+                                      size={60}
+                                    />
+                                  </div>
+                                  <div className="bg-black/80 px-3 py-2 rounded border border-gray-600">
+                                    <div className="text-center">
+                                      <div className="text-lg font-bold font-mono text-blue-400" style={{ textShadow: '0 0 6px #0099cc' }}>
+                                        {gapTime.toFixed(1)}s
+                                      </div>
+                                      <div className="text-xs text-gray-500 uppercase">GAP</div>
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                {/* Transition type selector for playlist mode */}
+                                <div className="grid grid-cols-1 gap-2">
+                                  <button
+                                    onClick={() => {
+                                      playIndustrialSound('click');
+                                      setTransitionType('crossfade');
+                                    }}
+                                    className={cn(
+                                      "px-3 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-all active:scale-95",
+                                      transitionType === 'crossfade' 
+                                        ? "bg-cyan-600 border-cyan-400 text-white" 
+                                        : "bg-gray-600 border-gray-500 text-gray-300 hover:bg-gray-500"
+                                    )}
+                                  >
+                                    CROSSFADE
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      playIndustrialSound('click');
+                                      setTransitionType('cut');
+                                    }}
+                                    className={cn(
+                                      "px-3 py-2 rounded text-xs font-bold uppercase tracking-wider border transition-all active:scale-95",
+                                      transitionType === 'cut' 
+                                        ? "bg-cyan-600 border-cyan-400 text-white" 
+                                        : "bg-gray-600 border-gray-500 text-gray-300 hover:bg-gray-500"
+                                    )}
+                                  >
+                                    HARD CUT
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Right side - Spectrum analyzer and EQ control */}
+                      <div className="space-y-4 h-full flex flex-col">
+                        {/* VU Meter Display */}
+                        <div className="bg-black rounded-lg p-2 shadow-inner border-2 border-gray-700 flex-shrink-0">
+                          <div className="bg-gradient-to-b from-gray-900 to-black rounded p-2 border border-gray-800">
+                            {/* LCD-style spectrum display */}
+                            <div className="h-20 relative overflow-hidden bg-gradient-to-b from-green-950 to-black rounded">
+                              <WaveVisualizer 
+                                isPlaying={isPlaying} 
+                                color="#00ff00"
+                                height={80}
+                                audioAnalyzer={audioAnalyzer}
+                                audioBuffer={processedAudioBuffer}
+                              />
+                              {/* VU grid overlay */}
+                              <div className="absolute inset-0 pointer-events-none"
+                                style={{
+                                  backgroundImage: `
+                                    repeating-linear-gradient(0deg, transparent, transparent 7px, rgba(0, 0, 0, 0.3) 7px, rgba(0, 0, 0, 0.3) 8px),
+                                    repeating-linear-gradient(90deg, transparent, transparent 7px, rgba(0, 0, 0, 0.3) 7px, rgba(0, 0, 0, 0.3) 8px)
+                                  `
+                                }}
+                              />
+                            </div>
+                            <div className="text-center mt-1">
+                              <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">SPECTRUM ANALYZER</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Combined Bass/Treble EQ Control - Full Width and Flex */}
+                        <div className="w-full flex-1">
+                          <EQXYPadControl
+                            bassValue={bassLevel}
+                            trebleValue={trebleLevel}
+                            onBassChange={setBassLevel}
+                            onTrebleChange={setTrebleLevel}
+                            width={0} // Will be calculated to full width
+                            height={200}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Tips with industrial styling */}
-          <Card className="border-2 border-gray-700 shadow-xl bg-gray-900">
-            <CardHeader className="border-b border-gray-700">
-              <CardTitle className="flex items-center gap-2 text-gray-100 font-black uppercase tracking-wider">
-                <Sparkles className="h-5 w-5 text-yellow-500" />
-                Operating Manual
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4">
-              <ul className="space-y-2 text-sm text-gray-400">
-                <li className="flex items-start gap-2">
-                  <span className="text-yellow-500 font-bold">01.</span>
-                  {mode === 'mash' 
-                    ? "Match BPM values for optimal blend results"
-                    : "Use longer transitions for smoother flow"
-                  }
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-yellow-500 font-bold">02.</span>
-                  {mode === 'mash'
-                    ? "Adjust blend ratio to control track dominance"
-                    : "Add gap time for natural track separation"
-                  }
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-yellow-500 font-bold">03.</span>
-                  Supported: MP3, WAV, FLAC, YouTube links
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-yellow-500 font-bold">04.</span>
-                  Monitor waveforms for real-time audio feedback
-                </li>
-              </ul>
-            </CardContent>
-          </Card>
+              </div>
+            </div>
+          </div>
         </div>
-
       </div>
 
       <input
@@ -1344,4 +1989,4 @@ export default function SongMasher() {
       <Toaster />
     </>
   );
-}
+} 
