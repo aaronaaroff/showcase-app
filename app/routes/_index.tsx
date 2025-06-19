@@ -16,7 +16,8 @@ import {
   BarChart3,
   FileJson,
   FileText,
-  Music
+  Music,
+  AudioWaveform
 } from "lucide-react";
 
 export function meta() {
@@ -90,6 +91,15 @@ const showcaseItems: ShowcaseItem[] = [
     category: "tool",
     status: "live",
     tags: ["Audio", "Mixing", "Visualizer", "Music"]
+  },
+  {
+    title: "Music Visualizer",
+    description: "Generate real-time audio visualizations with multiple styles including waveform, frequency bars, circular, and particles.",
+    href: "/tool/music-visualizer",
+    icon: AudioWaveform,
+    category: "tool",
+    status: "live",
+    tags: ["Audio", "Visualizer", "Canvas", "Web Audio API"]
   },
   {
     title: "JSON Formatter",
